@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FOMO Momentum Strategy v4</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;700;800&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #16161f;
+    --border: #1e1e2e;
+    --accent: #00ff88;
+    --accent2: #ff6b35;
+    --accent3: #4488ff;
+    --warn: #ffcc00;
+    --text: #e0e0f0;
+    --muted: #555570;
+    --red: #ff4455;
+    --green: #00ff88;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,255,136,0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,136,0.015) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrap {
+    position: relative;
+    z-index: 1;
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 36px 24px 60px;
+  }
+
+  /* ---- HEADER ---- */
+  .hdr {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 28px;
+    margin-bottom: 32px;
+  }
+
+  .hdr h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: 26px;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.5px;
+  }
+
+  .hdr h1 em { color: var(--accent); font-style: normal; }
+
+  .hdr-meta {
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+
+  .hdr-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+  }
+
+  .badge {
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 5px 10px;
+    border-radius: 2px;
+  }
+
+  .badge-sim { background: rgba(68,136,255,0.1); border: 1px solid rgba(68,136,255,0.3); color: var(--accent3); }
+  .badge-v2 { background: rgba(0,255,136,0.08); border: 1px solid rgba(0,255,136,0.25); color: var(--accent); }
+
+  /* ---- GONOGO ---- */
+  #gonogo {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 16px 24px;
+    border: 1px solid var(--border);
+    margin-bottom: 20px;
+    transition: border-color 0.4s, background 0.4s;
+  }
+
+  .gonogo-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: background 0.4s, box-shadow 0.4s;
+  }
+
+  .gonogo-verdict {
+    font-family: 'Syne', sans-serif;
+    font-size: 16px;
+    font-weight: 800;
+    transition: color 0.4s;
+  }
+
+  .gonogo-checks {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 2px;
+    letter-spacing: 0.5px;
+  }
+
+  .gonogo-right {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--muted);
+    text-align: right;
+    line-height: 1.6;
+  }
+
+  /* ---- METRICS ---- */
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .metric {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 16px 18px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .metric::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .m-green::after { background: var(--accent); }
+  .m-blue::after  { background: var(--accent3); }
+  .m-orange::after { background: var(--accent2); }
+  .m-yellow::after { background: var(--warn); }
+  .m-red::after { background: var(--red); }
+
+  .metric-lbl {
+    font-size: 8px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .metric-val {
+    font-family: 'Syne', sans-serif;
+    font-size: 24px;
+    font-weight: 800;
+    line-height: 1;
+    transition: color 0.4s;
+  }
+
+  .m-green .metric-val { color: var(--accent); }
+  .m-blue .metric-val  { color: var(--accent3); }
+  .m-orange .metric-val { color: var(--accent2); }
+  .m-yellow .metric-val { color: var(--warn); }
+  .m-red .metric-val { color: var(--red); }
+
+  .metric-sub {
+    font-size: 9px;
+    color: var(--muted);
+    margin-top: 5px;
+  }
+
+  /* ---- LAYOUT ---- */
+  .row { display: grid; gap: 12px; margin-bottom: 12px; }
+  .row-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .row-2 { grid-template-columns: 1.1fr 1fr; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 22px;
+  }
+
+  .card-ttl {
+    font-size: 8px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-ttl::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* ---- FILTERS ---- */
+  .filter-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .fl-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+    padding: 8px 10px;
+    border: 1px solid transparent;
+    transition: border-color 0.2s, background 0.2s;
+    border-radius: 1px;
+  }
+
+  .fl-row:hover { border-color: var(--border); background: var(--surface2); }
+  .fl-row.disabled { opacity: 0.35; pointer-events: none; }
+
+  .tog {
+    width: 34px; height: 18px;
+    background: var(--border);
+    border-radius: 9px;
+    position: relative;
+    flex-shrink: 0;
+    transition: background 0.2s;
+  }
+
+  .tog::after {
+    content: '';
+    position: absolute;
+    width: 12px; height: 12px;
+    background: var(--muted);
+    border-radius: 50%;
+    top: 3px; left: 3px;
+    transition: all 0.2s;
+  }
+
+  .tog.on { background: rgba(0,255,136,0.18); }
+  .tog.on::after { left: 19px; background: var(--accent); }
+
+  .fl-info { flex: 1; }
+  .fl-name { font-size: 11px; font-weight: 700; color: var(--text); }
+  .fl-desc { font-size: 9px; color: var(--muted); margin-top: 2px; }
+  .fl-delta { font-size: 11px; font-weight: 700; flex-shrink: 0; }
+
+  /* ---- REGIME ---- */
+  .regime-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+
+  .regime-btn {
+    flex: 1;
+    padding: 7px 0;
+    text-align: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    border: 1px solid var(--border);
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .regime-btn.active { border-color: var(--accent3); color: var(--accent3); background: rgba(68,136,255,0.08); }
+
+  /* ---- WINRATE BAR ---- */
+  .wr-wrap { margin-bottom: 18px; }
+  .wr-label-row { display: flex; justify-content: space-between; font-size: 9px; color: var(--muted); margin-bottom: 6px; }
+  .wr-track { height: 24px; background: rgba(255,68,85,0.15); border-radius: 2px; overflow: hidden; position: relative; }
+  .wr-fill {
+    height: 100%;
+    background: linear-gradient(90deg, rgba(0,255,136,0.3), rgba(0,255,136,0.5));
+    display: flex; align-items: center; padding-left: 10px;
+    font-size: 10px; font-weight: 700; color: var(--accent);
+    transition: width 0.5s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  .wr-target {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 1px;
+    background: var(--warn);
+    opacity: 0.6;
+    left: 55%;
+  }
+  .wr-target::after {
+    content: '55%';
+    position: absolute;
+    top: -16px;
+    left: 3px;
+    font-size: 8px;
+    color: var(--warn);
+    letter-spacing: 1px;
+  }
+
+  /* ---- SHARPE ROWS ---- */
+  .sh-row { display: flex; align-items: center; gap: 10px; font-size: 9px; margin-bottom: 7px; }
+  .sh-lbl { width: 90px; color: var(--muted); }
+  .sh-bg { flex: 1; height: 6px; background: var(--border); border-radius: 1px; overflow: hidden; }
+  .sh-fill { height: 100%; border-radius: 1px; transition: width 0.5s cubic-bezier(0.34,1.56,0.64,1); }
+  .sh-val { width: 32px; text-align: right; font-weight: 700; }
+
+  /* ---- EQUITY CANVAS ---- */
+  .canvas-wrap { height: 160px; position: relative; }
+  canvas { width: 100%; height: 100%; display: block; }
+
+  .canvas-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 9px; }
+  .leg-item { display: flex; align-items: center; gap: 5px; color: var(--muted); }
+  .leg-dot { width: 8px; height: 2px; border-radius: 1px; }
+
+  /* ---- TRADE LOG ---- */
+  .log-wrap {
+    max-height: 230px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .log-wrap::-webkit-scrollbar { width: 3px; }
+  .log-wrap::-webkit-scrollbar-track { background: var(--border); }
+  .log-wrap::-webkit-scrollbar-thumb { background: var(--muted); }
+
+  .tr {
+    display: grid;
+    grid-template-columns: 28px 1fr 60px 70px;
+    gap: 8px;
+    align-items: center;
+    padding: 7px 10px;
+    border-left: 2px solid transparent;
+    font-size: 9px;
+    line-height: 1.4;
+  }
+
+  .tr.win  { border-color: var(--accent); background: rgba(0,255,136,0.03); }
+  .tr.loss { border-color: var(--red);    background: rgba(255,68,85,0.03); }
+  .tr.filt { border-color: #2a2a3a;       background: transparent; opacity: 0.45; }
+
+  .tr-dir { font-weight: 700; font-size: 8px; letter-spacing: 1px; }
+  .tr.win .tr-dir  { color: var(--accent); }
+  .tr.loss .tr-dir { color: var(--red); }
+  .tr.filt .tr-dir { color: var(--muted); }
+
+  .tr-info { color: var(--muted); }
+  .tr-info strong { color: var(--text); font-weight: 400; }
+
+  .tr-pnl { text-align: right; font-weight: 700; font-size: 10px; }
+  .tr.win .tr-pnl  { color: var(--accent); }
+  .tr.loss .tr-pnl { color: var(--red); }
+  .tr.filt .tr-pnl { color: #333350; }
+
+  .tr-tag {
+    font-size: 7px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 2px 5px;
+    border-radius: 1px;
+    text-align: center;
+  }
+
+  .tag-win  { background: rgba(0,255,136,0.1); color: var(--accent); }
+  .tag-loss { background: rgba(255,68,85,0.1);  color: var(--red); }
+  .tag-filt { background: var(--border); color: var(--muted); }
+  .tag-opp  { background: rgba(255,204,0,0.1); color: var(--warn); }
+
+  /* ---- RUN BTN ---- */
+  .run-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    margin-top: 14px;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    border: 1px solid rgba(0,255,136,0.3);
+    background: rgba(0,255,136,0.06);
+    color: var(--accent);
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .run-btn:hover { background: rgba(0,255,136,0.12); border-color: var(--accent); }
+
+  /* ---- IMPACT TABLE ---- */
+  .imp-tbl { width: 100%; border-collapse: collapse; font-size: 10px; }
+  .imp-tbl th {
+    font-size: 8px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--muted); padding: 6px 10px; border-bottom: 1px solid var(--border);
+    font-weight: 400; text-align: left;
+  }
+
+  .imp-tbl td { padding: 9px 10px; border-bottom: 1px solid rgba(30,30,46,0.4); vertical-align: middle; }
+  .imp-tbl tr:last-child td { border-bottom: none; }
+
+  .bar-bg { height: 5px; background: var(--border); border-radius: 1px; overflow: hidden; min-width: 80px; }
+  .bar-fill { height: 100%; border-radius: 1px; }
+
+  .pri { font-size: 8px; letter-spacing: 1px; text-transform: uppercase; padding: 3px 6px; border-radius: 1px; }
+  .p-now  { background: rgba(0,255,136,0.1); color: var(--accent); }
+  .p-next { background: rgba(255,204,0,0.1);  color: var(--warn); }
+  .p-late { background: rgba(68,136,255,0.1); color: var(--accent3); }
+  .p-skip { background: rgba(85,85,112,0.1);  color: var(--muted); }
+
+  .op-cost { font-size: 9px; }
+  .op-win  { color: var(--warn); }
+  .op-loss { color: var(--muted); }
+
+  /* ---- FOOTER ---- */
+  .footer {
+    margin-top: 40px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    font-size: 8px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(3px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .tr { animation: fadeUp 0.25s ease; }
+
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .live { display:inline-block; width:6px; height:6px; background:var(--accent); border-radius:50%; animation:blink 2s infinite; margin-right:5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- HEADER -->
+  <div class="hdr">
+    <div>
+      <h1>FOMO <em>Momentum</em> Strategy</h1>
+      <div class="hdr-meta"><span class="live"></span>SOL/USDT · Bybit · Paper Simulation</div>
+    </div>
+    <div class="hdr-right">
+      <span class="badge badge-v2">v4 — VR + Pullback + Partial TP</span>
+      <span class="badge badge-sim">Simulation Only</span>
+    </div>
+  </div>
+
+  <!-- GO/NO-GO -->
+  <div id="gonogo">
+    <div class="gonogo-dot" id="gg-dot"></div>
+    <div>
+      <div class="gonogo-verdict" id="gg-verdict">NO-GO</div>
+      <div class="gonogo-checks" id="gg-checks">✗ WR > 45% · ✗ Sharpe > 0.5 · ✗ PF > 1.3</div>
+    </div>
+    <div class="gonogo-right" id="gg-action">
+      Enable filters and run simulation<br>to evaluate strategy readiness
+    </div>
+  </div>
+
+  <!-- METRICS -->
+  <div class="metrics">
+    <div class="metric m-green">
+      <div class="metric-lbl">Win Rate</div>
+      <div class="metric-val" id="m-wr">48%</div>
+      <div class="metric-sub">base: 48%</div>
+    </div>
+    <div class="metric m-blue">
+      <div class="metric-lbl">Sharpe</div>
+      <div class="metric-val" id="m-sh">0.32</div>
+      <div class="metric-sub">target: ≥ 0.8</div>
+    </div>
+    <div class="metric m-orange">
+      <div class="metric-lbl">Profit Factor</div>
+      <div class="metric-val" id="m-pf">0.91</div>
+      <div class="metric-sub">target: ≥ 1.3</div>
+    </div>
+    <div class="metric m-yellow">
+      <div class="metric-lbl">Trades / Run</div>
+      <div class="metric-val" id="m-tr">—</div>
+      <div class="metric-sub">filtered: <span id="m-fi">—</span></div>
+    </div>
+    <div class="metric m-red">
+      <div class="metric-lbl">Opportunity Cost</div>
+      <div class="metric-val" id="m-oc">—</div>
+      <div class="metric-sub">good trades skipped</div>
+    </div>
+  </div>
+
+  <!-- ROW 1: filters + visuals -->
+  <div class="row row-3">
+
+    <!-- Filters + regime -->
+    <div class="card">
+      <div class="card-ttl">Market Regime</div>
+      <div class="regime-row" id="regime-row">
+        <button class="regime-btn active" onclick="setRegime('normal')">Normal</button>
+        <button class="regime-btn" onclick="setRegime('volatile')">Volatile</button>
+        <button class="regime-btn" onclick="setRegime('trending')">Trending</button>
+      </div>
+
+      <div class="card-ttl">Фильтры</div>
+      <div class="filter-list">
+
+        <div class="fl-row" onclick="toggleFilter('trend')">
+          <div class="tog" id="tog-trend"></div>
+          <div class="fl-info">
+            <div class="fl-name">EMA Trend (8/21)</div>
+            <div class="fl-desc">на 1-мин closes · diff > 0.2% · не шортим бычий тренд</div>
+          </div>
+          <div class="fl-delta" style="color:var(--accent)">+5%</div>
+        </div>
+
+        <div class="fl-row" onclick="toggleFilter('minvol')">
+          <div class="tog" id="tog-minvol"></div>
+          <div class="fl-info">
+            <div class="fl-name">Min Vol Gate</div>
+            <div class="fl-desc">vol &lt; 0.002 → hard skip · до рандомных фильтров</div>
+          </div>
+          <div class="fl-delta" style="color:var(--accent)">+3%</div>
+        </div>
+
+        <div class="fl-row" onclick="toggleFilter('volume')">
+          <div class="tog" id="tog-volume"></div>
+          <div class="fl-info">
+            <div class="fl-name">Volume Confirm</div>
+            <div class="fl-desc">ratio > 1.5× avg(20) via fetch_trades</div>
+          </div>
+          <div class="fl-delta" style="color:var(--accent)">+4%</div>
+        </div>
+
+        <div class="fl-row" onclick="toggleFilter('atr')">
+          <div class="tog" id="tog-atr"></div>
+          <div class="fl-info">
+            <div class="fl-name">ATR Adaptive Stops</div>
+            <div class="fl-desc">high vol → 1.2× · low vol → 1.8× · динамический множитель</div>
+          </div>
+          <div class="fl-delta" style="color:var(--accent3)">+Sharpe</div>
+        </div>
+
+        <div class="fl-row" onclick="toggleFilter('vr')">
+          <div class="tog" id="tog-vr"></div>
+          <div class="fl-info">
+            <div class="fl-name">Volatility Ratio</div>
+            <div class="fl-desc">ATR(1m)/ATR(5m) · skip если &lt;0.6 или &gt;1.4</div>
+          </div>
+          <div class="fl-delta" style="color:var(--accent)">+4%</div>
+        </div>
+
+        <div class="fl-row" onclick="toggleFilter('pullback')">
+          <div class="tog" id="tog-pullback"></div>
+          <div class="fl-info">
+            <div class="fl-name">Pullback Filter</div>
+            <div class="fl-desc">свеча ниже EMA8 в бычьем тренде → skip</div>
+          </div>
+          <div class="fl-delta" style="color:var(--accent)">+3%</div>
+        </div>
+
+        <div class="fl-row" onclick="toggleFilter('partialtp')">
+          <div class="tog" id="tog-partialtp"></div>
+          <div class="fl-info">
+            <div class="fl-name">Partial TP (50/50)</div>
+            <div class="fl-desc">50% закрыть на 1×ATR · 50% на 2.25×ATR</div>
+          </div>
+          <div class="fl-delta" style="color:var(--warn)">+PF</div>
+        </div>
+
+        <div class="fl-row" onclick="toggleFilter('liquidity')">
+          <div class="tog" id="tog-liquidity"></div>
+          <div class="fl-info">
+            <div class="fl-name">Dynamic Liquidity</div>
+            <div class="fl-desc">vol > 50% avg · адаптивно</div>
+          </div>
+          <div class="fl-delta" style="color:var(--warn)">+2%</div>
+        </div>
+
+        <div class="fl-row disabled">
+          <div class="tog" id="tog-mtf"></div>
+          <div class="fl-info">
+            <div class="fl-name">Multi-Timeframe</div>
+            <div class="fl-desc">❌ нужны 2 недели реальных данных</div>
+          </div>
+          <div class="fl-delta" style="color:var(--muted)">later</div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- WinRate + Sharpe -->
+    <div class="card">
+      <div class="card-ttl">Эффект фильтров</div>
+
+      <div class="wr-wrap">
+        <div class="wr-label-row">
+          <span>Win Rate</span>
+          <span id="wr-pct">48%</span>
+        </div>
+        <div class="wr-track">
+          <div class="wr-fill" id="wr-fill" style="width:48%">48%</div>
+          <div class="wr-target"></div>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:8px; color:var(--muted); margin-top:4px;">
+          <span>0%</span><span>breakeven ~50%</span><span>100%</span>
+        </div>
+      </div>
+
+      <div style="margin-top: 18px;">
+        <div style="font-size:9px; color:var(--muted); margin-bottom:10px; letter-spacing:1px;">SHARPE RATIO (цель ≥ 0.8)</div>
+        <div class="sh-row">
+          <div class="sh-lbl">Базовый</div>
+          <div class="sh-bg"><div class="sh-fill" style="width:16%; background:var(--border)"></div></div>
+          <div class="sh-val" style="color:var(--muted)">0.32</div>
+        </div>
+        <div class="sh-row">
+          <div class="sh-lbl">С фильтрами</div>
+          <div class="sh-bg"><div class="sh-fill" id="sh-bar" style="width:16%; background:var(--accent)"></div></div>
+          <div class="sh-val" id="sh-val" style="color:var(--accent)">0.32</div>
+        </div>
+        <div class="sh-row">
+          <div class="sh-lbl">Цель</div>
+          <div class="sh-bg"><div class="sh-fill" style="width:40%; background:rgba(68,136,255,0.35)"></div></div>
+          <div class="sh-val" style="color:var(--accent3)">0.80</div>
+        </div>
+        <div class="sh-row">
+          <div class="sh-lbl">Стрейч</div>
+          <div class="sh-bg"><div class="sh-fill" style="width:52%; background:rgba(68,136,255,0.15)"></div></div>
+          <div class="sh-val" style="color:#335599">1.05</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Equity -->
+    <div class="card">
+      <div class="card-ttl">Equity Curve</div>
+      <div class="canvas-wrap">
+        <canvas id="eq-canvas"></canvas>
+      </div>
+      <div class="canvas-legend">
+        <div class="leg-item"><div class="leg-dot" style="background:var(--accent)"></div>С фильтрами</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--muted)"></div>Без фильтров</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--warn); opacity:0.5"></div>Baseline $1000</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ROW 2: trade log + impact table -->
+  <div class="row row-2">
+
+    <!-- Trade log -->
+    <div class="card">
+      <div class="card-ttl">Trade Log · с opportunity cost</div>
+      <div class="log-wrap" id="trade-log">
+        <div style="color:var(--muted); font-size:10px; padding:8px 0;">
+          Включи фильтры → Run Simulation
+        </div>
+      </div>
+      <button class="run-btn" onclick="runSim()">▶ Run Simulation (30 trades)</button>
+    </div>
+
+    <!-- Impact table -->
+    <div class="card">
+      <div class="card-ttl">Детальный анализ фильтров</div>
+      <table class="imp-tbl">
+        <thead>
+          <tr>
+            <th>Фильтр</th>
+            <th>WR Δ*</th>
+            <th>Сила</th>
+            <th>−Trades</th>
+            <th>Приоритет</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="font-weight:700">EMA Trend</td>
+            <td style="color:var(--accent)">+3–5%</td>
+            <td><div class="bar-bg"><div class="bar-fill" style="width:88%; background:var(--accent)"></div></div></td>
+            <td style="color:var(--muted)">~35%</td>
+            <td><span class="pri p-now">Сейчас</span></td>
+          </tr>
+          <tr>
+            <td style="font-weight:700">Min Vol Gate</td>
+            <td style="color:var(--accent)">+2–3%</td>
+            <td><div class="bar-bg"><div class="bar-fill" style="width:50%; background:var(--accent)"></div></div></td>
+            <td style="color:var(--muted)">~12%</td>
+            <td><span class="pri p-now">Сейчас</span></td>
+          </tr>
+          <tr>
+            <td style="font-weight:700">Volume</td>
+            <td style="color:var(--accent)">+3–4%</td>
+            <td><div class="bar-bg"><div class="bar-fill" style="width:72%; background:var(--accent)"></div></div></td>
+            <td style="color:var(--muted)">~25%</td>
+            <td><span class="pri p-now">Сейчас</span></td>
+          </tr>
+          <tr>
+            <td style="font-weight:700">Volatility Ratio</td>
+            <td style="color:var(--accent)">+3–5%</td>
+            <td><div class="bar-bg"><div class="bar-fill" style="width:78%; background:var(--accent)"></div></div></td>
+            <td style="color:var(--muted)">~20%</td>
+            <td><span class="pri p-now">Сейчас</span></td>
+          </tr>
+          <tr>
+            <td style="font-weight:700">Pullback Filter</td>
+            <td style="color:var(--accent)">+2–4%</td>
+            <td><div class="bar-bg"><div class="bar-fill" style="width:62%; background:var(--accent)"></div></div></td>
+            <td style="color:var(--muted)">~15%</td>
+            <td><span class="pri p-now">Сейчас</span></td>
+          </tr>
+          <tr>
+            <td style="font-weight:700">Partial TP 50/50</td>
+            <td style="color:var(--warn)">+PF 0.1–0.2</td>
+            <td><div class="bar-bg"><div class="bar-fill" style="width:45%; background:var(--warn)"></div></div></td>
+            <td style="color:var(--muted)">—</td>
+            <td><span class="pri p-now">Сейчас</span></td>
+          </tr>
+          <tr>
+            <td style="font-weight:700">Liquidity</td>
+            <td style="color:var(--warn)">+1–2%</td>
+            <td><div class="bar-bg"><div class="bar-fill" style="width:32%; background:var(--warn)"></div></div></td>
+            <td style="color:var(--muted)">~15%</td>
+            <td><span class="pri p-next">Потом</span></td>
+          </tr>
+          <tr>
+            <td style="font-weight:700; color:var(--muted)">RSI</td>
+            <td style="color:var(--muted)">overlap</td>
+            <td><div class="bar-bg"><div class="bar-fill" style="width:12%; background:var(--muted)"></div></div></td>
+            <td style="color:var(--muted)">~15%</td>
+            <td><span class="pri p-skip">Skip</span></td>
+          </tr>
+          <tr>
+            <td style="font-weight:700; color:var(--muted)">MTF</td>
+            <td style="color:var(--muted)">+5–8%</td>
+            <td><div class="bar-bg"><div class="bar-fill" style="width:55%; background:var(--muted)"></div></div></td>
+            <td style="color:var(--muted)">~50%</td>
+            <td><span class="pri p-late">2 недели</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="font-size:8px; color:var(--muted); margin-top:10px; line-height:1.6; border-top:1px solid var(--border); padding-top:10px;">
+        * Non-additive: каждый фильтр работает с остатком плохих сделок.<br>
+        Совокупный реалистичный потолок: +8–11% WR от базовых 48%.
+      </div>
+    </div>
+
+  </div>
+
+</div><!-- /wrap -->
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+const FS = { volume: false, trend: false, atr: false, liquidity: false, minvol: false, vr: false, pullback: false, partialtp: false };
+let regime = 'normal';
+let lastSimTrades = [];
+
+// Regime parameters → affects ATR and base WR edge
+const REGIMES = {
+  normal:   { atrBase: 0.008,  atrHigh: 0.015, wrBonus: 0.00, spreadRange: [0.008, 0.022] },
+  volatile: { atrBase: 0.014,  atrHigh: 0.028, wrBonus: 0.02, spreadRange: [0.012, 0.035] },
+  trending: { atrBase: 0.006,  atrHigh: 0.012, wrBonus: 0.03, spreadRange: [0.010, 0.025] },
+};
+
+// ============================================================
+// CORRECT NON-ADDITIVE WR CALCULATION (your formula)
+// ============================================================
+const FILTER_POWER = { volume: 0.08, trend: 0.10, atr: 0.02, liquidity: 0.04, minvol: 0.05, vr: 0.09, pullback: 0.07, partialtp: 0.01 };
+const FILTER_SHARPE = { volume: 0.05, trend: 0.08, atr: 0.12, liquidity: 0.03, minvol: 0.03, vr: 0.07, pullback: 0.05, partialtp: 0.08 };
+const FILTER_SKIP   = { volume: 0.25, trend: 0.35, atr: 0.00, liquidity: 0.15, minvol: 0.12, vr: 0.20, pullback: 0.15, partialtp: 0.00 };
+
+function calcWR(active, reg) {
+  let bad = 52 - (REGIMES[reg].wrBonus * 100); // % bad trades
+  for (const f of active) {
+    bad -= bad * FILTER_POWER[f];
+  }
+  return Math.min(62, Math.max(40, 100 - bad));
+}
+
+function calcSharpe(active) {
+  let s = 0.32;
+  for (const f of active) s += FILTER_SHARPE[f];
+  return Math.min(1.05, s);
+}
+
+function calcTradeReduction(active) {
+  let mult = 1.0;
+  for (const f of active) mult *= (1 - FILTER_SKIP[f]);
+  return mult;
+}
+
+// ============================================================
+// TRADE GENERATION (linked to ATR stops, not random PnL)
+// ============================================================
+function rng(lo = 0, hi = 1) { return lo + Math.random() * (hi - lo); }
+
+function generateTrade(active, reg, simWR) {
+  const R = REGIMES[reg];
+
+  // ATR from regime
+  const isHighVol = Math.random() > 0.65;
+  const atr = isHighVol ? rng(R.atrBase * 1.4, R.atrHigh) : rng(R.atrBase, R.atrBase * 1.4);
+
+  // Volatility Ratio: ATR(1m) / ATR(5m) — simulated
+  const atr1m = atr;
+  const atr5m = atr * rng(0.5, 1.8); // 5m ATR varies vs 1m
+  const vRatio = atr1m / atr5m;
+  const vrDead    = vRatio < 0.6;  // market too quiet
+  const vrChaotic = vRatio > 1.4;  // market too noisy
+
+  // Adaptive ATR multiplier (п.3): tighter in chaos, wider in quiet
+  const useATR = active.includes('atr');
+  const atrMult = useATR
+    ? (isHighVol ? 1.2 : 1.8)   // high vol → 1.2×, low vol → 1.8×
+    : 1.5;                        // fixed fallback
+  const sl = useATR ? Math.max(0.008, Math.min(0.025, atr * atrMult)) : 0.015;
+  const tp = sl * 1.5;
+
+  // Spread determines signal strength
+  const spread = rng(...R.spreadRange);
+
+  // Does trade pass filters?
+  let passes = true;
+  let filterReason = null;
+
+  // Min vol: hard gate before probabilistic filters (from patch — correct approach)
+  if (active.includes('minvol') && vol < 0.002) {
+    passes = false; filterReason = 'MIN_VOL';
+  }
+
+  // VR filter: skip dead and chaotic markets
+  if (passes && active.includes('vr') && (vrDead || vrChaotic)) {
+    passes = false; filterReason = vrDead ? 'VR_DEAD' : 'VR_CHAOS';
+  }
+
+  // Pullback filter: skip if last candle closed below EMA8 (micro-trend violation)
+  // Simulated: ~15% of bull setups have a pullback candle against trend
+  if (passes && active.includes('pullback') && Math.random() < 0.15) {
+    passes = false; filterReason = 'PULLBACK';
+  }
+
+  if (passes && active.includes('volume') && Math.random() < 0.25) {
+    passes = false; filterReason = 'LOW_VOL';
+  } else if (passes && active.includes('trend') && Math.random() < 0.28) {
+    passes = false; filterReason = 'COUNTER_TREND';
+  } else if (passes && active.includes('liquidity') && Math.random() < 0.10) {
+    passes = false; filterReason = 'LOW_LIQ';
+  }
+
+  // Win probability for this specific trade
+  // Larger spread → slightly better edge
+  const spreadBonus = Math.min(0.04, (spread - 0.01) * 2);
+  const tradeWR = passes ? Math.min(0.64, simWR / 100 + spreadBonus) : 0.48; // filtered trades use base WR
+
+  const isWin = Math.random() < tradeWR;
+
+  // PnL tied to ATR stops, not random bands
+  const pnl = isWin
+    ? tp * rng(0.70, 1.25)    // Hit TP with some variance
+    : -sl * rng(0.80, 1.10);  // Hit SL with some variance
+
+  return {
+    passes,
+    filterReason,
+    isWin,
+    pnl,
+    spread,
+    atr,
+    vRatio: +vRatio.toFixed(2),
+    vrDead, vrChaotic,
+    sl, tp,
+    dir: Math.random() > 0.5 ? 'LONG' : 'SHORT',
+    regime: isHighVol ? 'HIGH-VOL' : 'NORMAL',
+  };
+}
+
+// ============================================================
+// SIMULATION
+// ============================================================
+function runSim() {
+  const active = Object.entries(FS).filter(([,v]) => v).map(([k]) => k);
+  const simWR = calcWR(active, regime);
+  const TOTAL = 40;
+  const POS_SIZE = 0.05; // 5% per trade
+
+  let capital = 1000;
+  let capitalBase = 1000;
+  const eqFiltered = [1000];
+  const eqBase = [1000];
+
+  const trades = [];
+  let wins = 0, losses = 0, filteredCount = 0;
+  // Real PF: accumulate tp/sl values, not pnl — from patch (correct)
+  let pfWins = 0, pfLosses = 0;
+  let pnlList = [];
+
+  for (let i = 0; i < TOTAL; i++) {
+    const t = generateTrade(active, regime, simWR);
+    trades.push(t);
+
+    // Base equity (no filters, always trades, base WR 48%)
+    const baseWin = Math.random() < 0.48;
+    const baseATR = rng(REGIMES[regime].atrBase, REGIMES[regime].atrHigh);
+    const basePnl = baseWin
+      ? 0.020 * rng(0.7, 1.2)
+      : -0.015 * rng(0.8, 1.1);
+    capitalBase *= (1 + basePnl * POS_SIZE);
+    eqBase.push(capitalBase);
+
+    if (!t.passes) {
+      filteredCount++;
+      eqFiltered.push(capital); // flat
+    } else {
+      let tradePnl = t.pnl;
+
+      // Partial TP (п.9): 50% at 1×ATR, 50% at 2.25×ATR
+      // Converts some "almost-TP → SL" into partial wins
+      if (active.includes('partialtp') && t.isWin) {
+        const half1 = t.sl * 1.0;  // 1×ATR exit on half
+        const half2 = t.pnl;       // full TP on other half
+        tradePnl = (half1 + half2) / 2;
+      } else if (active.includes('partialtp') && !t.isWin) {
+        // 30% chance: price touched 1×ATR before SL → partial win
+        if (Math.random() < 0.30) {
+          tradePnl = (t.sl * 0.8 - t.sl * 0.5) / 2; // small net positive
+        }
+      }
+
+      capital *= (1 + tradePnl * POS_SIZE);
+      eqFiltered.push(capital);
+      pnlList.push(tradePnl);
+      if (tradePnl > 0) { wins++; pfWins += t.tp; }
+      else               { losses++; pfLosses += t.sl; }
+    }
+  }
+
+  lastSimTrades = trades;
+
+  // Opportunity cost: filtered trades that would've been wins
+  const filteredWins = trades.filter(t => !t.passes && t.isWin).length;
+  const filteredTotal = trades.filter(t => !t.passes).length;
+
+  // Metrics from actual simulation
+  const actualWR = (wins + losses) > 0 ? wins / (wins + losses) : 0.48;
+  // Real PF from tp/sl accumulation (patch fix — correct)
+  const pf = pfLosses > 0 ? pfWins / pfLosses : 0;
+  const avgPnl = pnlList.length ? pnlList.reduce((a,b) => a+b,0) / pnlList.length : 0;
+  const std = pnlList.length > 1
+    ? Math.sqrt(pnlList.reduce((a,b) => a + Math.pow(b - avgPnl, 2), 0) / (pnlList.length - 1))
+    : 0.01;
+  const sharpe = std > 0 ? (avgPnl / std) * Math.sqrt(252) : calcSharpe(active);
+  const actualSharpe = Math.max(0.1, Math.min(1.2, sharpe));
+
+  // Update metrics
+  document.getElementById('m-wr').textContent = (actualWR * 100).toFixed(0) + '%';
+  document.getElementById('m-sh').textContent = actualSharpe.toFixed(2);
+  document.getElementById('m-pf').textContent = pf.toFixed(2);
+  document.getElementById('m-tr').textContent = (wins + losses);
+  document.getElementById('m-fi').textContent = filteredCount;
+  document.getElementById('m-oc').textContent = filteredWins + '/' + filteredTotal;
+
+  // WR bar
+  const wrPct = Math.round(actualWR * 100);
+  document.getElementById('wr-fill').style.width = wrPct + '%';
+  document.getElementById('wr-fill').textContent = wrPct + '%';
+  document.getElementById('wr-pct').textContent = wrPct + '%';
+
+  // Sharpe bar
+  const shPct = Math.min(95, actualSharpe / 2 * 100);
+  document.getElementById('sh-bar').style.width = shPct + '%';
+  document.getElementById('sh-val').textContent = actualSharpe.toFixed(2);
+
+  // GO/NO-GO
+  updateGoNoGo(actualWR, actualSharpe, pf);
+
+  // Trade log
+  renderLog(trades, filteredWins);
+
+  // Equity
+  drawEquity(eqBase, eqFiltered);
+}
+
+// ============================================================
+// TRADE LOG
+// ============================================================
+function renderLog(trades, filteredWinsTotal) {
+  const log = document.getElementById('trade-log');
+  log.innerHTML = '';
+
+  trades.forEach(t => {
+    const div = document.createElement('div');
+
+    if (!t.passes) {
+      // Filtered — show opportunity cost
+      const wasGood = t.isWin;
+      div.className = 'tr filt';
+      div.innerHTML = `
+        <span class="tr-dir" style="color:var(--muted)">${t.dir}</span>
+        <span class="tr-info">
+          spread ${(t.spread*100).toFixed(2)}% ·
+          <strong style="color:${wasGood ? 'var(--warn)' : 'var(--muted)'}">
+            would ${wasGood ? 'WIN' : 'LOSS'}
+          </strong>
+        </span>
+        <span class="tr-pnl">${(t.pnl*100*0.05).toFixed(3)}%</span>
+        <span class="tr-tag ${wasGood ? 'tag-opp' : 'tag-filt'}">${wasGood ? 'MISSED' : t.filterReason}</span>
+      `;
+    } else {
+      div.className = 'tr ' + (t.isWin ? 'win' : 'loss');
+      div.innerHTML = `
+        <span class="tr-dir">${t.dir}</span>
+        <span class="tr-info">
+          sp ${(t.spread*100).toFixed(2)}% ·
+          SL ${(t.sl*100).toFixed(1)}% / TP ${(t.tp*100).toFixed(1)}%
+          <span style="color:var(--muted); font-size:8px"> [${t.regime} · VR ${t.vRatio}]</span>
+        </span>
+        <span class="tr-pnl">${(t.pnl*100*0.05).toFixed(3)}%</span>
+        <span class="tr-tag ${t.isWin ? 'tag-win' : 'tag-loss'}">${t.isWin ? 'TP HIT' : 'SL HIT'}</span>
+      `;
+    }
+
+    log.appendChild(div);
+  });
+
+  log.scrollTop = 0;
+}
+
+// ============================================================
+// EQUITY CURVE
+// ============================================================
+function drawEquity(eqBase, eqFiltered) {
+  const canvas = document.getElementById('eq-canvas');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = canvas.offsetWidth * dpr;
+  canvas.height = canvas.offsetHeight * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  const W = canvas.offsetWidth;
+  const H = canvas.offsetHeight;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Grid
+  ctx.strokeStyle = '#1a1a28';
+  ctx.lineWidth = 1;
+  for (let i = 1; i < 4; i++) {
+    ctx.beginPath();
+    ctx.moveTo(0, H * i / 4);
+    ctx.lineTo(W, H * i / 4);
+    ctx.stroke();
+  }
+
+  const allV = [...eqBase, ...eqFiltered];
+  const minV = Math.min(...allV) * 0.997;
+  const maxV = Math.max(...allV) * 1.003;
+  const range = maxV - minV || 1;
+
+  const toY = v => H - ((v - minV) / range) * H;
+  const toX = (i, len) => (i / (len - 1)) * W;
+
+  // Baseline $1000
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(255,204,0,0.25)';
+  ctx.setLineDash([3, 5]);
+  ctx.lineWidth = 1;
+  ctx.moveTo(0, toY(1000));
+  ctx.lineTo(W, toY(1000));
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  function drawLine(data, color, alpha, width) {
+    if (data.length < 2) return;
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = alpha;
+    ctx.lineWidth = width;
+    ctx.moveTo(toX(0, data.length), toY(data[0]));
+    for (let i = 1; i < data.length; i++) {
+      ctx.lineTo(toX(i, data.length), toY(data[i]));
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  drawLine(eqBase,     '#555570', 0.5, 1.2);
+  drawLine(eqFiltered, '#00ff88', 1.0, 1.8);
+
+  // Final capital label
+  const last = eqFiltered[eqFiltered.length - 1];
+  const color = last >= 1000 ? '#00ff88' : '#ff4455';
+  ctx.fillStyle = color;
+  ctx.font = '9px Space Mono, monospace';
+  ctx.fillText('$' + last.toFixed(0), W - 52, toY(last) - 5);
+}
+
+// ============================================================
+// GO/NO-GO
+// ============================================================
+function updateGoNoGo(wr, sharpe, pf) {
+  const checks = [
+    { pass: wr > 0.45,  label: 'WR > 45%' },
+    { pass: sharpe > 0.5, label: 'Sharpe > 0.5' },
+    { pass: pf > 1.3,   label: 'PF > 1.3' },
+  ];
+
+  const passed = checks.filter(c => c.pass).length;
+  const go = passed === 3;
+  const marginal = passed === 2;
+
+  const el = document.getElementById('gonogo');
+  const dot = document.getElementById('gg-dot');
+  const verdict = document.getElementById('gg-verdict');
+  const checksEl = document.getElementById('gg-checks');
+  const action = document.getElementById('gg-action');
+
+  if (go) {
+    el.style.borderColor = 'rgba(0,255,136,0.3)';
+    el.style.background = 'rgba(0,255,136,0.04)';
+    dot.style.background = '#00ff88';
+    dot.style.boxShadow = '0 0 8px rgba(0,255,136,0.5)';
+    verdict.style.color = '#00ff88';
+    verdict.textContent = 'GO';
+    action.textContent = 'Start live trading with €100 max.\nScale only after 2 profitable weeks.';
+  } else if (marginal) {
+    el.style.borderColor = 'rgba(255,204,0,0.3)';
+    el.style.background = 'rgba(255,204,0,0.04)';
+    dot.style.background = '#ffcc00';
+    dot.style.boxShadow = '0 0 8px rgba(255,204,0,0.4)';
+    verdict.style.color = '#ffcc00';
+    verdict.textContent = 'MARGINAL';
+    action.textContent = 'Edge exists but thin.\nAdd missing filters, continue paper trading.';
+  } else {
+    el.style.borderColor = 'rgba(255,68,85,0.3)';
+    el.style.background = 'rgba(255,68,85,0.04)';
+    dot.style.background = '#ff4455';
+    dot.style.boxShadow = '0 0 8px rgba(255,68,85,0.4)';
+    verdict.style.color = '#ff4455';
+    verdict.textContent = 'NO-GO';
+    action.textContent = 'Strategy not ready.\nEnable filters and retest.';
+  }
+
+  checksEl.textContent = checks.map(c => (c.pass ? '✓' : '✗') + ' ' + c.label).join(' · ');
+}
+
+// ============================================================
+// TOGGLE / REGIME (only update static metrics, not simulation)
+// ============================================================
+function toggleFilter(name) {
+  FS[name] = !FS[name];
+  document.getElementById('tog-' + name).classList.toggle('on', FS[name]);
+  // Only update the theoretical Sharpe + WR bars (before sim)
+  updateStaticMetrics();
+}
+
+function setRegime(r) {
+  regime = r;
+  document.querySelectorAll('.regime-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent.toLowerCase() === r);
+  });
+  updateStaticMetrics();
+}
+
+function updateStaticMetrics() {
+  const active = Object.entries(FS).filter(([,v]) => v).map(([k]) => k);
+  const wr = calcWR(active, regime);
+  const sharpe = calcSharpe(active);
+
+  // Only update theoretical display (before running simulation)
+  if (lastSimTrades.length === 0) {
+    document.getElementById('m-wr').textContent = wr.toFixed(0) + '%';
+    document.getElementById('m-sh').textContent = sharpe.toFixed(2);
+
+    const wrPct = Math.round(wr);
+    document.getElementById('wr-fill').style.width = wrPct + '%';
+    document.getElementById('wr-fill').textContent = wrPct + '%';
+    document.getElementById('wr-pct').textContent = wrPct + '%';
+
+    const shPct = Math.min(95, sharpe / 2 * 100);
+    document.getElementById('sh-bar').style.width = shPct + '%';
+    document.getElementById('sh-val').textContent = sharpe.toFixed(2);
+  }
+}
+
+// ============================================================
+// INIT
+// ============================================================
+updateStaticMetrics();
+window.addEventListener('resize', () => {
+  if (lastSimTrades.length > 0) {
+    // Redraw equity on resize — need stored equity arrays
+    // Simple re-run for now
+  }
+});
+</script>
+</body>
+</html>
